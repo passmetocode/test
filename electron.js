@@ -365,6 +365,11 @@ function isPluginsEnabled()
 {
 	return enablePlugins;
 }
+// 설정 저장 경로를 %APPDATA%\hydro 로 강제 설정  /hydro_yangs
+const hydroUserDataPath = path.join(app.getPath('appData'), 'hydro');
+app.setPath('userData', hydroUserDataPath);
+
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
@@ -422,7 +427,7 @@ app.whenReady().then(() =>
 			}
 		}
 
-		createWindow(opts);
+//		createWindow(opts);  hydro_yangs 새파일 안됨..
 	})
 	
     let argv = process.argv
@@ -909,6 +914,95 @@ app.whenReady().then(() =>
     // 	})
     // }
 
+// hydro_yangs 인증문제로 채널추가.
+let isHydroAuthenticated = false;
+const hydroPath = path.join(__dirname, 'hydrocal.exe');
+
+async function authenticateHydro() {
+  try {
+    await fs.promises.access(hydroPath, fs.constants.F_OK);
+
+	const proc = spawn(hydroPath, ['--from-drawio', 'secure-token-1234']);
+
+	let output = '';
+
+	proc.stdout.on('data', (data) => {
+	output += data.toString();
+	if (output.includes('❌ 인증 실패')) {
+		dialog.showErrorBox('인증 실패', output);
+		proc.kill(); // 즉시 프로세스 종료
+		app.exit(1);
+	}
+	});
+
+	proc.stderr.on('data', (data) => {
+	output += data.toString();
+	});
+
+	proc.on('close', (code) => {
+	if (code === 0) {
+		isHydroAuthenticated = true;
+		console.log("✅ 인증 성공");
+	} else {
+		dialog.showErrorBox('인증 실패', output || '❌ hydrocal.exe 인증에 실패했습니다.');
+		app.exit(1);
+	}
+	});
+
+  } catch (err) {
+    console.log('hydroPath:', hydroPath); // 경로 확인용 로그
+    dialog.showErrorBox('Missing File', '❌ hydrocal.exe 파일이 없습니다. 앱을 종료합니다.');
+    app.exit(1);
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+function runHydroCalculation(filePath, pageName, userOption) {
+  if (!isHydroAuthenticated) {
+    dialog.showErrorBox('인증 필요', '❌ hydrocal.exe가 인증되지 않았습니다.');
+    return;
+  }
+
+  const args = [filePath, pageName, userOption];
+  const proc = spawn(hydroPath, args);
+
+  proc.stdout.on('data', (data) => {
+    console.log(`Hydrocal 결과: ${data}`);
+  });
+
+  proc.stderr.on('data', (data) => {
+    console.error(`Hydrocal 오류: ${data}`);
+  });
+}
+// app.whenReady().then(() => {
+//  authenticateHydro();
+// });
+
+
+// 현재 스크립트 파일이 위치한 디렉터리
+const appBasePath = `${__dirname}` //__dirname;
+
+//const appBasePath = "P:\\Dev\\Hydrocal"  // 실행 파일 위치
+const defaultFilename = 'default.hydro';
+const defaultPath = path.join(appBasePath, defaultFilename);
+//const defaultPath = path.join(__dirname, 'default.hydro');
+
+// 파일 존재 여부 확인
+    if (program.args) {
+        program.args = [];
+		program.args.push(defaultPath);
+    }
+
+	
     let win = createWindow()
     
 	let loadEvtCount = 0;
@@ -2334,9 +2428,9 @@ function getAppDataFolder()
 {
 	try
 	{
-		var appDataDir = app.getPath('appData');
-		var drawioDir = appDataDir + '/draw.io'; // hydro_yangs '/draw.io'
-		
+		var appDataDir = app.getPath('appData');  
+//		var drawioDir = appDataDir + '/draw.io';//hydro_yangs 작업중 저장 디렉토리 drawio와 분리함. (디렉토리를 만들기만 함.)
+		var drawioDir = appDataDir + '/hydro';		
 		if (!fs.existsSync(drawioDir)) //Usually this dir already exists
 		{
 			fs.mkdirSync(drawioDir);
@@ -2447,7 +2541,7 @@ async function readFile(filename, encoding)
 {
 	let data = await fsProm.readFile(filename, encoding);
 
-	if (checkFileContent(data, encoding) && !path.resolve(filename).startsWith(appBaseDir))
+	if (checkFileContent(data, encoding) )//&& !path.resolve(filename).startsWith(appBaseDir))
 	{
 		return data;
 	}
@@ -2683,28 +2777,37 @@ ipcMain.on("rendererReq", async (event, args) =>
 		event.reply('mainResp', {error: true, msg: e.message, e: e, reqId: args.reqId});
 	}
 });
-// run-hydro 핸들러 정의
-ipcMain.handle('run-hydro', async (event, filePath) => {
-  return new Promise((resolve, reject) => {
-    const hydroPath = path.join(process.cwd(), 'hydro.exe');  // hydro.exe는 실행 폴더에 있어야 함
+// hydro_yangs
 
-    const proc = spawn(hydroPath, [filePath]);
+ipcMain.handle('run-hydro', async (event, filePath, currentPageName, userOption) => {
+  return new Promise((resolve, reject) => {
+    const pythonPath = 'python'; // 또는 'python3' 또는 전체 경로
+	const scriptPath = path.resolve(__dirname, 'P:\\Dev\\Hydrocal\\Hydrocal.py');
+    //const scriptPath = path.join(process.cwd(), 'Hydro_main.py');
+    const args = [scriptPath, filePath, currentPageName, userOption];
+	const proc = spawn(pythonPath, args, { encoding: 'utf8' });
+    //const proc = spawn(pythonPath, args);
 
     let output = '';
     proc.stdout.on('data', (data) => {
-      output += data.toString();
+      output += data.toString('utf8');
     });
 
     proc.stderr.on('data', (data) => {
-      output += data.toString();
+      output += data.toString('utf8');
+	  
     });
 
     proc.on('close', (code) => {
-      resolve(output || `Hydro exited with code ${code}`);
+      if (code === 0) {
+        resolve(output || `✅ hydro calculation completed`);
+      } else {
+        resolve(output || `❌ hydro calculation exited with code ${code}`);
+      }
     });
 
     proc.on('error', (err) => {
-      reject(err);
+      reject(`❌ Failed to run hydro calculation : ${err}`);
     });
   });
 });
