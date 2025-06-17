@@ -2,7 +2,7 @@
 
 import sys
 import os, io
-import main_sequence, config
+import hydro.main_sequence as main_sequence, config
 
 # 표준 출력에 UTF-8 인코딩 강제 설정
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
@@ -20,7 +20,7 @@ def validate_launch():
         print("❌ 인증 실패: 토큰 불일치")
         sys.exit(1)
 
-    print("✅ 인증 성공")
+    print("✅ 인증 성공") # 여기 수빈이가 사용할 곳..
     sys.exit(0)
 
 def run_calculation():
@@ -59,7 +59,7 @@ if __name__ == "__main__":
 # 실행경로 위치에 잘 맞추고, 파일을 불러들이는 코드
 # python hydrocal.py "C:\Dev\Hydrocal\hydro_template.hydro" hydro ip
 
-# pyinstaller --onefile --noconsole hydrocal.py
+# pyinstaller --onefile --noconsole --icon=hydrocal.ico hydrocal.py
 
 # drawio의 plugin 부분을 미리 적어둔거임. 잊지 말라고.
 # Draw.loadPlugin(function(ui) {
@@ -100,8 +100,3 @@ if __name__ == "__main__":
 #   };
 
 # });
-
-
-
-
-
