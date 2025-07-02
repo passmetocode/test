@@ -2,8 +2,10 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 from xml.dom import minidom  # for pretty print
 import config
+import re
+import uuid
 
-def clear_stream_result_contents_only(root):
+def clear_calculation_result_contents_only(root):
     # 1. 'hydro' diagram 찾기
     diagram = next(
         (d for d in root.findall("diagram") if d.attrib.get("name") == config.current_page),
@@ -15,17 +17,32 @@ def clear_stream_result_contents_only(root):
     graph_model = diagram.find("mxGraphModel")
     root_elem = graph_model.find("root")
 
-    # 2. stream_result 레이어 ID 찾기
+    # 2. calculation_result 레이어 ID 찾기
     stream_layer_id = None
     for cell in root_elem.findall("mxCell"):
-        if cell.attrib.get("value") == "stream_result":
+        if cell.attrib.get("value") == "Calculation Result":
             stream_layer_id = cell.attrib["id"]
             break
 
     if not stream_layer_id:
-        raise ValueError("stream_result 레이어를 찾을 수 없습니다.")
+        raise ValueError("Calculation Result 레이어를 찾을 수 없습니다.")
 
-    # 3. stream_result 레이어 아래 셀만 삭제 (재귀적으로)
+
+    # 2.5. 기존 좌표 찾기
+    top_left_position = None
+    for cell in root_elem.findall("mxCell"):
+        if cell.attrib.get("parent") == stream_layer_id:
+            value = cell.attrib.get("value")
+            if value and value.strip().lower() in ["phase", "line size[inch]"]:  # 기준 셀
+                geometry = cell.find("mxGeometry")
+                if geometry is not None:
+                    x = float(geometry.attrib.get("x", 0))
+                    y = float(geometry.attrib.get("y", 0))
+                    top_left_position = (x, y)
+                    break  # 첫 번째 기준 셀만 저장
+
+
+    # 3. Calculation Result 레이어 아래 셀만 삭제 (재귀적으로)
     def collect_children_ids(parent_id):
         children = []
         for cell in root_elem.findall("mxCell"):
@@ -40,7 +57,7 @@ def clear_stream_result_contents_only(root):
         if cell.attrib.get("id") in to_delete_ids:
             root_elem.remove(cell)
 
-    return root_elem, stream_layer_id
+    return root_elem, stream_layer_id, top_left_position
 
 def add_dataframe_to_layer(df, root_elem, parent_id, start_x=30, start_y=900,
                            index_col_width=110, col_width=50, cell_height=15, font_size=9, max_cols=20, row_spacing=2):
@@ -150,16 +167,63 @@ def add_string_content_to_drawio(content, root_elem, parent_id, start_x=30, star
     })
     geometry.set("as", "geometry")
   
-def tree_write_lines (file_path, root, only_lines): # ✅ drawio 파일에 write
+# def tree_write_lines (file_path, root, only_lines, final_grouped_routes ): # ✅ drawio 파일에 write
+#     calculation_sheet = root.find(f".//diagram[@name='{config.current_page}']")
+#     for obj in calculation_sheet.findall('.//object'):
+#         for line in only_lines :
+#             if obj.get('id') == line['ID'] :
+#               obj.set('o1_reynolds', "{:.0f}".format(line['reynolds']))
+#               obj.set('o2_velocity', "{:.2f}".format(line['velocity']))
+#               obj.set('o3_friction_loss', "{:.2f}".format(line['pressure_drop']))
+#               obj.set('o4_static_pressure', "{:.2f}".format(line['static_pressure']))
+#     return 
+
+def tree_write_lines(file_path, root, only_lines, final_grouped_routes):
+    # 현재 페이지의 diagram 찾기
     calculation_sheet = root.find(f".//diagram[@name='{config.current_page}']")
+    if calculation_sheet is None:
+        print(f"❌ diagram '{config.current_page}' not found.")
+        return
+
+    # only_lines의 ID만 추출
+    line_ids = {line['ID'] for line in only_lines}
+    # final_grouped_routes가 한 덩어리로 묶여 있을 경우 풀어줌
+    if len(final_grouped_routes) == 1 and isinstance(final_grouped_routes[0], list):
+        final_grouped_routes = final_grouped_routes[0]
+
+    # 모든 선을 strokeWidth=1로 초기화 (only_lines에 포함된 것만)
     for obj in calculation_sheet.findall('.//object'):
-        for line in only_lines :
-            if obj.get('id') == line['ID'] :
-              obj.set('o1_reynolds', "{:.0f}".format(line['reynolds']))
-              obj.set('o2_velocity', "{:.2f}".format(line['velocity']))
-              obj.set('o3_friction_loss', "{:.2f}".format(line['pressure_drop']))
-              obj.set('o4_static_pressure', "{:.2f}".format(line['static_pressure']))
-    return 
+        obj_id = obj.get('id')
+        if obj_id in line_ids:
+            mxcell = obj.find('.//mxCell')
+            if mxcell is not None and mxcell.get('edge') == '1':
+                style = mxcell.get('style') or ''
+                style = re.sub(r'strokeWidth=\d+;?', '', style)
+                mxcell.set('style', f"{style}strokeWidth=1;")
+    # 첫 루트의 선만 strokeWidth=2로 강조
+    if final_grouped_routes:
+        first_route = final_grouped_routes[0]
+        first_route_ids = {line['ID'] for line in first_route if isinstance(line, dict) and 'ID' in line}
+
+        for obj in calculation_sheet.findall('.//object'):
+            obj_id = obj.get('id')
+            if obj_id in first_route_ids and obj_id in line_ids:
+                mxcell = obj.find('.//mxCell')
+                if mxcell is not None and mxcell.get('edge') == '1':
+                    style = mxcell.get('style') or ''
+                    style = re.sub(r'strokeWidth=\d+;?', '', style)
+                    mxcell.set('style', f"{style}strokeWidth=2;")
+
+    # 계산 결과를 object에 기록
+    for obj in calculation_sheet.findall('.//object'):
+        obj_id = obj.get('id')
+        for line in only_lines:
+            if obj_id == line['ID']:
+                obj.set('o1_reynolds', f"{line.get('reynolds', 0):.0f}")
+                obj.set('o2_velocity', f"{line.get('velocity', 0):.2f}")
+                obj.set('o3_friction_loss', f"{line.get('pressure_drop', 0):.2f}")
+                obj.set('o4_static_pressure', f"{line.get('static_pressure', 0):.2f}")
+    return
 
 def tree_write_valves (file_path, root, only_valves): # ✅ drawio 파일에 write
     calculation_sheet = root.find(f".//diagram[@name='{config.current_page}']")
@@ -228,4 +292,62 @@ def tree_write_running_status (file_path, root, running_status): # ✅ drawio �
     for obj in calculation_sheet.findall(".//object"):
         if obj.get("label") is not None and obj.get("id") is not None and obj.get("hydro_version"):
             obj.set('running_status', converted_text)
+            obj.set('hydro_version', 'v1.0.0 - beta') # version 정보 추가
     return
+
+
+
+def add_watermark_to_layer(
+    root_elem,
+    parent_id,
+    text="CONFIDENTIAL #HYDRO-001 CONFIDENTIAL #HYDRO-001 CONFIDENTIAL #HYDRO-001",
+    x=600, y=400,
+    width=1, height=1,
+    font_size=30,
+    rotation=35.5,
+    opacity=100,
+    font_color="#CCCCCC"
+):
+    """
+    Draw.io XML에 워터마크 노드를 추가하는 함수
+
+    Parameters:
+    - root_elem: XML의 <root> 요소
+    - parent_id: 부모 노드 ID
+    - text: 워터마크 텍스트
+    - x, y: 위치 좌표
+    - width, height: 크기
+    - font_size: 폰트 크기
+    - rotation: 회전 각도
+    - opacity: 불투명도 (0~100)
+    - font_color: 폰트 색상 (예: "#CCCCCC")
+
+    Returns:
+    - 생성된 셀의 ID
+    """
+    def gen_id():
+        return str(uuid.uuid4())
+
+    cell_id = gen_id()
+    style = (
+        f"locked=1;opacity={opacity};rotation={rotation};fillColor=none;"
+        f"strokeColor=none;fontSize={font_size};fontColor={font_color};"
+    )
+
+    cell = ET.SubElement(root_elem, "mxCell", {
+        "id": cell_id,
+        "value": text,
+        "style": style,
+        "parent": parent_id,
+        "vertex": "1"
+    })
+
+    geometry = ET.SubElement(cell, "mxGeometry", {
+        "x": str(x),
+        "y": str(y),
+        "width": str(width),
+        "height": str(height),
+        "as": "geometry"
+    })
+
+    return cell_id
