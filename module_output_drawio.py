@@ -254,32 +254,48 @@ def tree_write_pumps (file_path, root, only_pumps): # ✅ drawio 파일에 write
 #         f.write(reparsed.toprettyxml(indent="  "))  
 #     return 
 
+# def tree_write_in_drawio_file(file_path, root):
+#     # # XML 문자열 생성 (pretty print 없이)
+#     # xml_str = ET.tostring(root, encoding="utf-8", method="xml").decode("utf-8")
+#     # xml_str = xml_str.replace('\n', '&#10;')  # Direct replacement
+
+#     # # XML 파일에 직접 저장 (불필요한 공백 없이)
+#     # with open(file_path, "w", encoding="utf-8") as f:
+#     #     f.write(xml_str)
+
+#     #     rough_string = ET.tostring(self.root, encoding='utf-8')
+#     #     reparsed = minidom.parseString(rough_string)
+#     #     with open(self.file_path, 'w', encoding='utf-8') as f:
+#     #         f.write(reparsed.toprettyxml(indent='  '))
+
+
+#     # Save XML without extra escape of '&'
+#     rough_string = ET.tostring(root, encoding='utf-8').decode('utf-8')
+#     # Ensure &#10; remains intact without being converted
+#     rough_string = rough_string.replace('&amp;#10;', '&#10;').replace('&#10;', '&#xa;')
+
+#     with open(file_path, 'w', encoding='utf-8') as f:
+#         f.write(rough_string)                    
+#     return
+
 def tree_write_in_drawio_file(file_path, root):
-    # # XML 문자열 생성 (pretty print 없이)
-    # xml_str = ET.tostring(root, encoding="utf-8", method="xml").decode("utf-8")
-    # xml_str = xml_str.replace('\n', '&#10;')  # Direct replacement
+    # mxfile 태그를 hydrofile로 되돌림
+    if root.tag == 'mxfile':
+        root.tag = 'hydrofile'
 
-    # # XML 파일에 직접 저장 (불필요한 공백 없이)
-    # with open(file_path, "w", encoding="utf-8") as f:
-    #     f.write(xml_str)
-
-    #     rough_string = ET.tostring(self.root, encoding='utf-8')
-    #     reparsed = minidom.parseString(rough_string)
-    #     with open(self.file_path, 'w', encoding='utf-8') as f:
-    #         f.write(reparsed.toprettyxml(indent='  '))
-
-
-    # Save XML without extra escape of '&'
+    # XML 문자열로 변환
     rough_string = ET.tostring(root, encoding='utf-8').decode('utf-8')
-    # Ensure &#10; remains intact without being converted
-    rough_string = rough_string.replace('&amp;#10;', '&#10;').replace('&#10;', '&#xa;')
 
+    # &amp;#10; 관련 처리
+    rough_string = rough_string.replace('&amp;amp;#10;', '&amp;#10;').replace('&amp;#10;', '&amp;#xa;')
+
+    # 파일에 저장
     with open(file_path, 'w', encoding='utf-8') as f:
-        f.write(rough_string)                    
+        f.write(rough_string)
     return
 
 
-def tree_write_running_status (file_path, root, running_status): # ✅ drawio 파일에 write
+def tree_write_running_status (file_path, root, running_status, water_mark): # ✅ drawio 파일에 write
     def convert_to_encoded_string(text: str) -> str:
         return text.replace("\n", "&#10;")
     # text = "yangslkfgsdoifgsdlfgjsl;dkfgjsdf;kgjsd;lfjkgs;dlfkgjs;ldkfgjs;ldkfgjs;ldkfgjs;ldkfgjsdlkgfsldfkjasldkfjalskdfj"
@@ -293,6 +309,7 @@ def tree_write_running_status (file_path, root, running_status): # ✅ drawio �
         if obj.get("label") is not None and obj.get("id") is not None and obj.get("hydro_version"):
             obj.set('running_status', converted_text)
             obj.set('hydro_version', 'v1.0.0 - beta') # version 정보 추가
+            obj.set('user_information', water_mark)
     return
 
 

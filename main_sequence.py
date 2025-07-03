@@ -16,6 +16,13 @@ def calculation_sequence (file_path, running_status):
     def load_drawio(file_path):
         tree = ET.parse(file_path)
         root = tree.getroot()
+
+        # hydro 전용 태그라면 변환 (in-memory)
+        if root.tag == 'hydrofile':
+            # print("💡 hydro 전용 파일 감지됨. 태그 변환 중...")
+            root.tag = 'mxfile'
+            # 여기에 필요한 경우 diagram 내부도 처리 가능
+
         return tree, root
     
     tree, root = load_drawio(file_path)
@@ -232,11 +239,13 @@ def calculation_sequence (file_path, running_status):
 #     # 사용 예시
 #     # print(generate_watermark_text())
 #     asd= generate_watermark_text()
+    if config.user == "guest" : 
+        module_output_drawio.add_watermark_to_layer (root_elem, CalculationResult_layer_id, generate_watermark_text())
+    else:
+        pass
     
-    module_output_drawio.add_watermark_to_layer (root_elem, CalculationResult_layer_id, generate_watermark_text())
-
     # ✅ running_status in drawio.file 
-    module_output_drawio.tree_write_running_status (file_path, root, running_status)
+    module_output_drawio.tree_write_running_status (file_path, root, running_status, generate_watermark_text())
 
     # ✅ save tree in drawio.file 
     module_output_drawio.tree_write_in_drawio_file (file_path, root)

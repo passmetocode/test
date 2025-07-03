@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 import sys
-import os, io
+import os, io, subprocess
 import hydro.main_sequence as main_sequence, config
 
 # 표준 출력에 UTF-8 인코딩 강제 설정
@@ -23,6 +23,24 @@ def validate_launch():
     print("✅ 인증 성공") # 여기 수빈이가 사용할 곳..
     sys.exit(0)
 
+def is_usb_serial_connected(target_serial: str) -> bool:
+    try:
+        result = subprocess.check_output(
+            'wmic path Win32_USBHub get DeviceID',
+            shell=True
+        )
+        lines = result.decode(errors='ignore').splitlines()
+        for line in lines:
+            if target_serial.lower() in line.strip().lower():
+                return True
+        return False
+    except Exception:
+        return False
+
+def check_usb_only():
+    print("true" if is_usb_serial_connected(config.usb_key) else "false") 
+    sys.exit(0)
+    
 def run_calculation():
     # 기존 계산 로직 수행
     config.file_path = sys.argv[1].strip('"')
@@ -32,8 +50,17 @@ def run_calculation():
     if not os.path.exists(config.file_path):
         print(f"❌ 파일 없음: {config.file_path}")
         sys.exit(1)
-
-    main_sequence.calculation_sequence(config.file_path, running_status)
+    try:
+        # 뭔가 에러날 수 있는 코드
+        if is_usb_serial_connected(config.usb_key):
+            config.user="user"
+        else:
+            config.user="guest"    
+        main_sequence.calculation_sequence(config.file_path, running_status)
+    except Exception as e:
+        print(f"⚠️ 예외 발생: {e}")
+        sys.exit(1)
+    return
 
 class MessageAccumulator:
     def __init__(self):
@@ -49,7 +76,11 @@ class MessageAccumulator:
         self.messages = []
 
 if __name__ == "__main__":
-    if '--from-drawio' in sys.argv:
+    # ✅ JS에서 USB 확인 용도로 호출한 경우
+    if '--usb-check' in sys.argv:
+        check_usb_only()
+
+    elif '--from-drawio' in sys.argv:
         validate_launch()
     else:
         running_status = MessageAccumulator()
