@@ -1,0 +1,12 @@
+file_path = None
+current_page = None
+option = None
+pressure_selection = None
+keyfile_type = None
+device_usb = None
+device_uuid = None
+start_date = None
+expired_date = None
+user = None
+current_date = None
+current_time = None
