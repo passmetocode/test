@@ -58,3 +58,55 @@ Graph.prototype.cloneEdge = function(p) {
 
     return clone;
 };
+
+
+
+Graph.prototype.cloneEdge = function(p) {
+    const model = this.model;
+    const graph = this;
+    let clone = null;
+
+    // 1. 트랜잭션: clone 생성 & 추가까지 완료
+    model.beginUpdate();
+    try {
+        // 원본 edge의 연결 정보 및 속성
+        const geo = graph.getCellGeometry(p);
+        const style = graph.getCellStyle(p);
+        const source = model.getTerminal(p, true);  // source vertex
+        const target = model.getTerminal(p, false); // target vertex
+        const parent = model.getParent(p);
+
+        // clone 생성
+        clone = model.cloneCell(p);
+        model.add(parent, clone);
+
+        // 복제된 edge: 우선 원본처럼 연결
+        model.setTerminal(clone, source, true);
+        model.setTerminal(clone, target, false);
+
+        // geometry/스타일 복사
+        if (geo) model.setGeometry(clone, geo.clone());
+        if (style) model.setStyle(clone, style);
+
+    } finally {
+        model.endUpdate(); // ← 중요한 기준점!
+    }
+
+    // ------------------------------------
+    // 2. endUpdate 이후에 연결 정보를 서로 교환 (SWAP)
+    const sourceOriginal = model.getTerminal(p, true);
+    const targetOriginal = model.getTerminal(p, false);
+
+    const sourceClone = model.getTerminal(clone, true);
+    const targetClone = model.getTerminal(clone, false);
+
+    // 서로 연결 바꾸기 (p <-> clone)
+    model.setTerminals(p, sourceClone, targetClone);     // 원본은 clone의 연결로
+    model.setTerminals(clone, sourceOriginal, targetOriginal); // clone은 원래대로
+
+    // 3. 뷰 갱신
+    graph.refresh();
+
+    // 4. clone 반환 (선택)
+    return clone;
+};
