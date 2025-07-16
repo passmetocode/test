@@ -1,0 +1,60 @@
+    };
+    // var u = Graph.prototype.splitEdge;
+    // Graph.prototype.splitEdge = function(p, A, B, F, K, R, Z, ha) {
+    //     null == ha && (ha = this.model.getParent(p),
+    //         this.isTable(ha) || this.isTableRow(ha)) && (ha = this.getCellAt(R, Z, null, !0, !1));
+    //     B = null;
+    //     this.model.beginUpdate();
+    //     try {
+    //         B = u.apply(this, [p, A, B, F, K, R, Z, ha]);
+    //         this.model.setValue(B, "");
+    //         var fa = this.getChildCells(B, !0);
+    //         for (A = 0; A < fa.length; A++) {
+    //             var ia = this.getCellGeometry(fa[A]);
+    //             null != ia && ia.relative && 0 < ia.x && this.model.remove(fa[A])
+    //         }
+    //         var va = this.getChildCells(p, !0);
+    //         for (A = 0; A < va.length; A++) ia = this.getCellGeometry(va[A]), null != ia && ia.relative && 0 >= ia.x && this.model.remove(va[A]);
+    //         var Ma = this.model.getTerminal(B, !1);
+    //         if (null != Ma) {
+    //             var Na = this.getCurrentCellStyle(Ma);
+    //             null != Na && "1" == Na.snapToPoint && (this.setCellStyles(mxConstants.STYLE_EXIT_X, null, [p]), this.setCellStyles(mxConstants.STYLE_EXIT_Y, null, [p]), this.setCellStyles(mxConstants.STYLE_ENTRY_X, null, [B]), this.setCellStyles(mxConstants.STYLE_ENTRY_Y, null, [B]))
+    //         }
+    //     } finally {
+    //         this.model.endUpdate()
+    //     }
+    //     return B
+    // };
+Graph.prototype.cloneEdge = function(p) {
+    var model = this.model;
+    var clone = null;
+
+    model.beginUpdate();
+    try {
+        // 기존 edge의 geometry, style, terminal 정보 복사
+        var geo = this.getCellGeometry(p);
+        var style = this.getCellStyle(p);
+        var source = model.getTerminal(p, true);
+        var target = model.getTerminal(p, false);
+
+        // 새 edge 생성
+        clone = model.cloneCell(p);
+        model.add(model.getParent(p), clone);
+
+        // 연결 설정
+        model.setTerminal(clone, source, true);
+        model.setTerminal(clone, target, false);
+
+        // geometry 복사
+        if (geo != null) {
+            model.setGeometry(clone, geo.clone());
+        }
+
+        // 스타일 복사
+        model.setStyle(clone, style);
+    } finally {
+        model.endUpdate();
+    }
+
+    return clone;
+};
