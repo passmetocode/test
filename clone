@@ -25,88 +25,63 @@
     //     }
     //     return B
     // };
-Graph.prototype.cloneEdge = function(p) {
-    var model = this.model;
-    var clone = null;
+mxGraph.prototype.splitEdge = function(a, b, c, d, e, f, g, k) {
+    d = d || 0;
+    e = e || 0;
+    k = k != null ? k : this.model.getParent(a);
+    f = this.model.getTerminal(a, true);
 
-    model.beginUpdate();
+    this.model.beginUpdate();
     try {
-        // 기존 edge의 geometry, style, terminal 정보 복사
-        var geo = this.getCellGeometry(p);
-        var style = this.getCellStyle(p);
-        var source = model.getTerminal(p, true);
-        var target = model.getTerminal(p, false);
+        // 새 edge c가 없으면 복제해서 생성
+        if (c == null) {
+            c = this.cloneCell(a);
+            var state = this.view.getState(a);
+            var geo = this.getCellGeometry(c);
 
-        // 새 edge 생성
-        clone = model.cloneCell(p);
-        model.add(model.getParent(p), clone);
+            if (geo != null && geo.points != null && state != null) {
+                var translate = this.view.translate;
+                var scale = this.view.scale;
+                var segmentIndex = mxUtils.findNearestSegment(state, (d + translate.x) * scale, (e + translate.y) * scale);
 
-        // 연결 설정
-        model.setTerminal(clone, source, true);
-        model.setTerminal(clone, target, false);
-
-        // geometry 복사
-        if (geo != null) {
-            model.setGeometry(clone, geo.clone());
+                // 원래 edge와 clone edge의 points 분할
+                geo.points = geo.points.slice(0, segmentIndex);
+                var originalGeo = this.getCellGeometry(a);
+                if (originalGeo != null && originalGeo.points != null) {
+                    originalGeo = originalGeo.clone();
+                    originalGeo.points = originalGeo.points.slice(segmentIndex);
+                    this.model.setGeometry(a, originalGeo);
+                }
+            }
         }
 
-        // 스타일 복사
-        model.setStyle(clone, style);
+        // 노드 이동
+        this.cellsMoved(b, d, e, false, false);
+
+        // c를 먼저 추가
+        this.cellsAdded([c], k, this.model.getChildCount(k), f, b[0], false);
+
+        // b 노드 추가
+        this.cellsAdded(b, k, this.model.getChildCount(k), null, null, true);
+
+        // 연결
+        this.cellConnected(a, b[0], true);
+
+        // 🔄 Z-순서 직접 조정: c를 a 바로 뒤에 삽입
+        const model = this.model;
+        const parent = k;
+        const children = model.getChildCells(parent);
+        const aIndex = children.indexOf(a);
+
+        model.remove(c);
+        model.add(parent, c, aIndex); // a 바로 뒤에 삽입
+
+
+        // 이벤트 발생
+        this.fireEvent(new mxEventObject(mxEvent.SPLIT_EDGE, "edge", a, "cells", b, "newEdge", c, "dx", d, "dy", e));
     } finally {
-        model.endUpdate();
+        this.model.endUpdate();
     }
 
-    return clone;
-};
-
-
-
-Graph.prototype.cloneEdge = function(p) {
-    const model = this.model;
-    const graph = this;
-    let clone = null;
-
-    // 1. 트랜잭션: clone 생성 & 추가까지 완료
-    model.beginUpdate();
-    try {
-        // 원본 edge의 연결 정보 및 속성
-        const geo = graph.getCellGeometry(p);
-        const style = graph.getCellStyle(p);
-        const source = model.getTerminal(p, true);  // source vertex
-        const target = model.getTerminal(p, false); // target vertex
-        const parent = model.getParent(p);
-
-        // clone 생성
-        clone = model.cloneCell(p);
-        model.add(parent, clone);
-
-        // 복제된 edge: 우선 원본처럼 연결
-        model.setTerminal(clone, source, true);
-        model.setTerminal(clone, target, false);
-
-        // geometry/스타일 복사
-        if (geo) model.setGeometry(clone, geo.clone());
-        if (style) model.setStyle(clone, style);
-
-    } finally {
-        model.endUpdate(); // ← 중요한 기준점!
-    }
-
-    // ------------------------------------
-    // 2. endUpdate 이후에 연결 정보를 서로 교환 (SWAP)
-    const sourceOriginal = model.getTerminal(p, true);
-    const targetOriginal = model.getTerminal(p, false);
-
-    const sourceClone = model.getTerminal(clone, true);
-    const targetClone = model.getTerminal(clone, false);
-
-    // 서로 연결 바꾸기 (p <-> clone)
-    model.setTerminals(p, sourceClone, targetClone);     // 원본은 clone의 연결로
-    model.setTerminals(clone, sourceOriginal, targetOriginal); // clone은 원래대로
-
-    // 3. 뷰 갱신
-    graph.refresh();
-
-    // 4. clone 반환 (선택)
-    return clone;
+    return c;
 };
