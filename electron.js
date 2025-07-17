@@ -426,7 +426,66 @@ app.whenReady().then(() =>
 				opts.height = arg.height;
 			}
 		}
-		createWindow(opts);		
+
+		const isDev = !app.isPackaged;
+
+		const appBasePath = isDev
+		? "P:\\Hydro"  // 개발용 절대경로
+		: path.resolve(path.dirname(process.execPath), '../');  // 배포용 EXE 상위 폴더
+
+		const defaultFilename = 'newfile.hydro';
+		const defaultPath = path.join(appBasePath, defaultFilename);
+
+
+		// 파일 존재 여부 확인
+			if (program.args) {
+				program.args = [];
+				program.args.push(defaultPath);
+			}
+
+			
+			let win = createWindow()
+			
+			let loadEvtCount = 0;
+					
+			function loadFinished(e)
+			{
+				if (e != null && !validateSender(e.senderFrame)) return null;
+
+				loadEvtCount++;
+				
+				if (loadEvtCount == 2)
+				{
+					//Sending entire program is not allowed in Electron 9 as it is not native JS object
+					win.webContents.send('args-obj', {args: program.args, create: options.create});
+				}
+			}
+			
+			//Order of these two events is not guaranteed, so wait for them async.
+			//TOOD There is still a chance we catch another window 'app-load-finished' if user created multiple windows quickly 
+			ipcMain.once('app-load-finished', loadFinished);
+
+			win.webContents.on('did-finish-load', function()
+			{
+				if (firstWinFilePath != null)
+				{
+					if (program.args != null)
+					{
+						program.args.push(firstWinFilePath);
+					}
+					else
+					{
+						program.args = [firstWinFilePath];
+					}
+				}
+				
+				firstWinLoaded = true;
+				
+				win.webContents.zoomFactor = appZoom;
+				win.webContents.setVisualZoomLevelLimits(1, appZoom);
+				loadFinished();
+			});
+		//createWindow(opts);		
 	})
 	
     let argv = process.argv
