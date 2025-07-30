@@ -1,0 +1,17 @@
+
+    def block_edit_on_phase(event):
+        row = event.row
+        col = event.column
+
+        # phase는 항상 col=1
+        phase = sheet.get_cell_data(row, 1).strip().lower()
+        # 편집 차단 조건
+        if (phase == "liquid" and col == 3) or (phase == "vapor" and col == 2) or col in [0, 1]:
+            print(f"Editing blocked at row {row}, col {col} due to phase '{phase}'")
+            event.prevent_default()  # 편집 차단
+            return False
+        else:
+            # event.prevent_default()  # 편집 차단            
+            return 
+
+    sheet.extra_bindings("begin_edit_cell", block_edit_on_phase)
