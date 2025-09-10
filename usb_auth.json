@@ -1,0 +1,12 @@
+{
+  "authorized_usb": [
+    {
+      "usb_id": "FC053228007AD",
+      "expires": "2025-12-31"
+    },
+    {
+      "usb_id": "ABCDEF1234567890",
+      "expires": "2025-10-31"
+    }
+  ]
+}
