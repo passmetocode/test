@@ -1,3 +1,0 @@
-Get-CimInstance Win32_PnPEntity | Where-Object { $_.DeviceID -like "USB*" } | Select-Object -ExpandProperty DeviceID
-
-3025041600000000000029
